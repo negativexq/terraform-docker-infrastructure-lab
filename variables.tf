@@ -75,6 +75,28 @@ variable "grafana_image" {
   }
 }
 
+variable "alertmanager_image" {
+  description = "Pinned Alertmanager image tag."
+  type        = string
+  default     = "prom/alertmanager:v0.32.1"
+
+  validation {
+    condition     = can(regex("^prom/alertmanager:[^:]+$", var.alertmanager_image))
+    error_message = "alertmanager_image must be an Alertmanager image with a pinned tag."
+  }
+}
+
+variable "mailpit_image" {
+  description = "Pinned Mailpit image tag."
+  type        = string
+  default     = "axllent/mailpit:v1.30.0"
+
+  validation {
+    condition     = can(regex("^axllent/mailpit:[^:]+$", var.mailpit_image))
+    error_message = "mailpit_image must be a Mailpit image with a pinned tag."
+  }
+}
+
 variable "prometheus_port" {
   description = "Host port exposed by Prometheus."
   type        = number
@@ -94,6 +116,28 @@ variable "grafana_port" {
   validation {
     condition     = var.grafana_port >= 1024 && var.grafana_port <= 65535
     error_message = "grafana_port must be between 1024 and 65535."
+  }
+}
+
+variable "alertmanager_port" {
+  description = "Host port exposed by Alertmanager."
+  type        = number
+  default     = 9093
+
+  validation {
+    condition     = var.alertmanager_port >= 1024 && var.alertmanager_port <= 65535
+    error_message = "alertmanager_port must be between 1024 and 65535."
+  }
+}
+
+variable "mailpit_web_port" {
+  description = "Host port exposed by the Mailpit web interface."
+  type        = number
+  default     = 8025
+
+  validation {
+    condition     = var.mailpit_web_port >= 1024 && var.mailpit_web_port <= 65535
+    error_message = "mailpit_web_port must be between 1024 and 65535."
   }
 }
 

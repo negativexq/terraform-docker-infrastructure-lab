@@ -1,0 +1,40 @@
+groups:
+  - name: fastapi-alerts
+    rules:
+      - alert: FastAPIDown
+        expr: up{job="fastapi"} == 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: FastAPI scrape target is down
+          description: Prometheus cannot scrape the FastAPI metrics endpoint.
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(fastapi_http_requests_total{status=~"5.."}[2m]))
+            /
+            clamp_min(sum(rate(fastapi_http_requests_total[2m])), 1e-9)
+          ) > 0.05
+          and sum(rate(fastapi_http_requests_total[2m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: FastAPI 5xx error rate is high
+          description: FastAPI 5xx responses exceed 5 percent of observed requests.
+
+      - alert: HighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(fastapi_http_request_duration_seconds_bucket[5m]))
+          ) > 0.5
+          and sum(rate(fastapi_http_request_duration_seconds_count[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: FastAPI P95 latency is high
+          description: FastAPI aggregated P95 request latency is above 500 milliseconds.

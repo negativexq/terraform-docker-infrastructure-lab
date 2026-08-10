@@ -1,0 +1,18 @@
+global:
+  resolve_timeout: 1m
+  smtp_smarthost: mailpit:1025
+  smtp_from: alerts@terraform-docker-lab.local
+  smtp_require_tls: false
+
+route:
+  receiver: local-mailpit
+  group_by: [alertname, severity]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 2m
+
+receivers:
+  - name: local-mailpit
+    email_configs:
+      - to: devops@terraform-docker-lab.local
+        send_resolved: true
