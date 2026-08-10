@@ -6,6 +6,18 @@ A production-style local infrastructure lab built with Terraform and Docker. It 
 
 > This project is intended for education and portfolio use. Production deployments require dedicated secret management, TLS, backups, hardened network policies, and production-grade observability and security.
 
+## What this demonstrates
+
+- Modular Terraform boundaries for the Docker network, application stack, and observability stack.
+- State-safe Terraform refactoring with explicit `moved` blocks that preserve resource identities.
+- Native `terraform test` plan tests using mocked Docker providers.
+- CI validation and security scanning with TFLint, Trivy, Gitleaks, and Hadolint.
+- A containerized FastAPI/PostgreSQL stack behind Nginx.
+- Prometheus, Grafana, Alertmanager, and Mailpit observability for the local stack.
+- End-to-end load and alert lifecycle tests covering controlled errors, latency, and API downtime.
+
+The `production` profile is a local example with different names and ports; this repository does not provision or claim to be a production deployment.
+
 ## Architecture
 
 ```mermaid
@@ -64,7 +76,7 @@ You can also use the application_url, prometheus_url, grafana_url, alertmanager_
 
 The checked-in example variable file publishes Nginx on port 8080. The local terraform.tfvars used for the verified development run publishes it on port 8081; use the application_url output rather than assuming either port.
 
-## Development and production examples
+## Development and local production-style profile
 
 The example files contain no real secrets. Create a local variable file:
 
@@ -74,7 +86,7 @@ make plan
 make apply
 ```
 
-To try the production naming and port profile locally:
+To try the local profile named `production` (it is not a production deployment):
 
 ```bash
 cp environments/production.tfvars.example terraform-production.tfvars
@@ -200,6 +212,8 @@ Alertmanager waits 10 seconds to group alerts, uses a 30-second group interval, 
 
 Prometheus, Alertmanager, and Grafana configuration paths and contents are tracked with deterministic SHA-256 hashes. When a hash changes, the related terraform_data and replace_triggered_by relationships recreate the relevant container; configuration files are mounted read-only. Applying Terraform is sufficient after a configuration change.
 
+Only PostgreSQL uses a named persistent Docker volume. Prometheus TSDB data, Grafana's local data, and Alertmanager state are stored in their container filesystems and are therefore lost if those containers are replaced; Terraform reprovisions the tracked configuration and dashboards. This is an intentional local-lab limitation, not a backup or durability design.
+
 ### Manually triggering and observing an alert
 
 Manual docker stop is intended only to demonstrate alerting and Terraform runtime drift:
@@ -323,8 +337,8 @@ The local backend is used by default and creates the state file in the working d
 ## Security notes
 
 - PostgreSQL is not published on a host port.
-- PostgreSQL and Grafana password variables are marked sensitive = true.
-- Real secrets must not be stored in .tfvars or state; even for education, use local temporary values.
+- PostgreSQL and Grafana password variables are marked `sensitive = true`, which redacts normal CLI output but does not remove values from Terraform state or Docker environment configuration.
+- Use disposable local-only values; real secrets must not be committed, and local state must be protected or removed after use.
 - Nginx uses HTTP here. Real deployments require TLS and a secret manager.
 - Container image tags are pinned as examples; apply security scanning and controlled upgrades when updating them.
 

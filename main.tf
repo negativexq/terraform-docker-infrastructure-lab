@@ -50,6 +50,4 @@ module "observability" {
   alertmanager_port      = var.alertmanager_port
   mailpit_image          = var.mailpit_image
   mailpit_web_port       = var.mailpit_web_port
-
-  depends_on = [module.application]
 }

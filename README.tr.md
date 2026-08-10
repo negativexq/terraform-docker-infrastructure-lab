@@ -6,6 +6,18 @@ Terraform ve Docker ile oluşturulmuş, production-style bir lokal altyapı labo
 
 > Bu proje eğitim ve portföy kullanımı içindir. Production dağıtımları özel secret yönetimi, TLS, yedekleme, güçlendirilmiş ağ politikaları ve production-grade gözlemlenebilirlik/güvenlik tasarımı gerektirir.
 
+## Bu proje neyi gösteriyor?
+
+- Docker network, uygulama stack’i ve gözlemlenebilirlik stack’i için modüler Terraform sınırları.
+- Resource kimliklerini koruyan açık `moved` bloklarıyla state-safe Terraform refactoring.
+- Mock Docker provider kullanan native `terraform test` plan testleri.
+- TFLint, Trivy, Gitleaks ve Hadolint ile CI doğrulaması ve güvenlik taraması.
+- Nginx arkasında containerized FastAPI/PostgreSQL stack’i.
+- Lokal stack için Prometheus, Grafana, Alertmanager ve Mailpit gözlemlenebilirliği.
+- Kontrollü hata, gecikme ve API kapanması senaryolarını kapsayan uçtan uca yük ve alarm yaşam döngüsü testleri.
+
+`production` profili farklı isim ve portlara sahip lokal bir örnektir; bu repository gerçek bir production deployment sağlamaz veya böyle bir iddiada bulunmaz.
+
 ## Mimari
 
 ```mermaid
@@ -64,7 +76,7 @@ Terraform output’larındaki application_url, prometheus_url, grafana_url, aler
 
 Repository’deki örnek variable dosyası Nginx’i 8080 portundan publish eder. Doğrulanmış development çalışmasında kullanılan lokal terraform.tfvars ise 8081 portunu publish eder; iki porttan birini varsaymak yerine application_url output’unu kullanın.
 
-## Development ve production örnekleri
+## Development ve lokal production-style profil
 
 Örnek dosyalar gerçek secret içermez. Lokal bir variable dosyası oluşturun:
 
@@ -74,7 +86,7 @@ make plan
 make apply
 ```
 
-Production adlandırmasını ve port profilini lokal olarak denemek için:
+`production` adını taşıyan lokal profili denemek için (bu bir production deployment değildir):
 
 ```bash
 cp environments/production.tfvars.example terraform-production.tfvars
@@ -200,6 +212,8 @@ Alertmanager alarmları gruplamak için 10 saniye bekler, 30 saniyelik group int
 
 Prometheus, Alertmanager ve Grafana yapılandırma yolları ve içerikleri deterministik SHA-256 hash’lerle izlenir. Hash değiştiğinde ilgili terraform_data ve replace_triggered_by ilişkileri container’ı yeniden oluşturur; yapılandırma dosyaları read-only mount edilir. Bu nedenle yapılandırma değişikliğinden sonra Terraform apply yeterlidir.
 
+Yalnızca PostgreSQL named persistent Docker volume kullanır. Prometheus TSDB verisi, Grafana’nın lokal verisi ve Alertmanager state’i container filesystem’lerinde tutulur; bu container’lar yeniden oluşturulursa kaybolur. Terraform izlenen yapılandırmaları ve dashboard’ları yeniden provision eder. Bu, bilinçli bir lokal-lab sınırlamasıdır; backup veya durability tasarımı değildir.
+
 ### Alarmı manuel tetikleme ve izleme
 
 Manuel docker stop yalnızca alarm ve Terraform runtime drift davranışını göstermek içindir:
@@ -323,8 +337,8 @@ Varsayılan olarak local backend kullanılır ve state dosyası çalışma dizin
 ## Güvenlik notları
 
 - PostgreSQL host portunda publish edilmez.
-- PostgreSQL ve Grafana parola variable’ları sensitive = true olarak işaretlenmiştir.
-- Gerçek secret’lar .tfvars veya state içine yazılmamalıdır; eğitimde bile lokal geçici değerler kullanılmalıdır.
+- PostgreSQL ve Grafana parola variable’ları `sensitive = true` olarak işaretlenmiştir; bu normal CLI çıktısını maskeler ancak değerleri Terraform state’inden veya Docker environment yapılandırmasından kaldırmaz.
+- Yalnızca geçici lokal değerler kullanın; gerçek secret’lar commit edilmemeli, lokal state korunmalı veya kullanım sonrası silinmelidir.
 - Nginx burada HTTP kullanır. Gerçek dağıtımlar TLS ve secret manager gerektirir.
 - Container image tag’leri örnek olarak pinlenmiştir; güncellerken güvenlik taraması ve kontrollü yükseltme uygulayın.
 
