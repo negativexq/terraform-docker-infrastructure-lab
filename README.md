@@ -185,6 +185,22 @@ Production’da Mailpit yerine erişim kontrollü gerçek bir SMTP relay veya e-
 ├── prometheus/prometheus.yml
 ├── prometheus/rules/fastapi-alerts.yml
 ├── alertmanager/alertmanager.yml
+├── modules/
+│   ├── network/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── versions.tf
+│   ├── application/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── versions.tf
+│   └── observability/
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── versions.tf
 ├── grafana/
 │   ├── dashboards/fastapi-overview.json
 │   └── provisioning/
@@ -198,7 +214,29 @@ Production’da Mailpit yerine erişim kontrollü gerçek bir SMTP relay veya e-
 └── terraform.tfvars.example
 ```
 
-Bu örnekte kaynaklar tek bir kök modülde tutuldu. Üç servisin tanımları birbirinden farklı olduğu için yapay bir modül katmanı eklenmedi; daha büyük projelerde tekrar eden container veya network desenleri `modules/` altına taşınabilir.
+Root modül yalnızca provider yapılandırmasını, mevcut kullanıcı değişkenlerini, child module çağrılarını ve output passthrough’larını içerir. Kaynak sorumlulukları şu şekilde ayrılmıştır:
+
+- `modules/network`: ortak Docker network ve tüm host portlarının benzersizlik precondition’ı
+- `modules/application`: PostgreSQL volume/image/container’ları, FastAPI image build’i ve Nginx
+- `modules/observability`: Prometheus, Grafana, Alertmanager, Mailpit ve monitoring config hash replacement’ları
+
+Docker provider yalnızca root’ta configure edilir. Child module’lardaki `versions.tf` dosyaları sadece provider source/version sözleşmesini bildirir; tekrar provider block oluşturmaz.
+
+## State migration ve plan beklentisi
+
+Refactor sırasında mevcut resource adreslerinin module adreslerine taşınması [moved.tf](moved.tf) içindeki açık mapping’lerle tanımlıdır. `terraform state mv` veya state dosyasına manuel düzenleme kullanılmaz. Terraform mevcut state’teki Docker kimliklerini koruyarak örneğin `docker_container.app` adresini `module.application.docker_container.app` adresine taşır.
+
+Güvenli migration akışı:
+
+```bash
+cp terraform.tfstate terraform.tfstate.refactor-backup
+terraform init
+terraform plan
+```
+
+Beklenen plan, yalnızca state adreslerinin `module.*` adreslerine taşındığını göstermeli ve sonunda `0 to add, 0 to change, 0 to destroy` yazmalıdır. Container, image, network veya PostgreSQL volume replacement’ı görünürse `terraform apply` çalıştırmayın; önce plan farkını inceleyin. `terraform.tfstate.refactor-backup`, mevcut `.gitignore` kuralları nedeniyle Git’e eklenmez.
+
+Bu refactor’da network adı, container adları, host portları, image tag’leri ve PostgreSQL volume adı değiştirilmez. Config hash’leri aynı kaldığı için Prometheus, Grafana ve Alertmanager container’ları da yeniden oluşturulmamalıdır.
 
 ## Terraform state
 

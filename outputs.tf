@@ -1,34 +1,34 @@
 output "application_url" {
   description = "URL served by the Nginx reverse proxy."
-  value       = "http://localhost:${var.nginx_port}"
+  value       = module.application.application_url
 }
 
 output "network_name" {
   description = "Docker network used by all application services."
-  value       = docker_network.app.name
+  value       = module.network.network_name
 }
 
 output "postgres_volume_name" {
   description = "Persistent Docker volume used by PostgreSQL."
-  value       = docker_volume.postgres.name
+  value       = module.application.postgres_volume_name
 }
 
 output "prometheus_url" {
   description = "URL for the Prometheus UI."
-  value       = "http://localhost:${var.prometheus_port}"
+  value       = module.observability.prometheus_url
 }
 
 output "grafana_url" {
   description = "URL for the Grafana UI."
-  value       = "http://localhost:${var.grafana_port}"
+  value       = module.observability.grafana_url
 }
 
 output "alertmanager_url" {
   description = "URL for the Alertmanager UI."
-  value       = "http://localhost:${var.alertmanager_port}"
+  value       = module.observability.alertmanager_url
 }
 
 output "mailpit_url" {
   description = "URL for the Mailpit web interface."
-  value       = "http://localhost:${var.mailpit_web_port}"
+  value       = module.observability.mailpit_url
 }
