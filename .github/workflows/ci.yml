@@ -150,15 +150,17 @@ jobs:
 
       - name: Upload IaC SARIF
         if: ${{ always() && (github.event_name == 'push' || github.event.pull_request.head.repo.fork == false) && hashFiles('trivy-config.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@60168efe1c415ce0f5521ea06d5c2062adbeed1b # v3.28.17
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
         with:
           sarif_file: trivy-config.sarif
+          category: trivy-config
 
       - name: Upload image SARIF
         if: ${{ always() && (github.event_name == 'push' || github.event.pull_request.head.repo.fork == false) && hashFiles('trivy-image.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@60168efe1c415ce0f5521ea06d5c2062adbeed1b # v3.28.17
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
         with:
           sarif_file: trivy-image.sarif
+          category: trivy-image
 
       - name: Enforce Trivy thresholds
         if: ${{ always() && (steps.trivy-config.outcome == 'failure' || steps.trivy-fs.outcome == 'failure' || steps.trivy-image.outcome == 'failure') }}
