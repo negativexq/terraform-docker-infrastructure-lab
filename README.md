@@ -267,6 +267,16 @@ Bu repository’deki DevSecOps kontrolleri uygulama kodu, Terraform, Dockerfile,
 | Hadolint | `app/Dockerfile` best-practice ve güvenlik lint’i |
 | Dependabot | GitHub Actions, Terraform provider, Python/pip ve Docker base image güncellemeleri |
 
+### Native Terraform testleri
+
+`terraform test`, root modülün output/name sözleşmelerini ve `modules/network`, `modules/application`, `modules/observability` modüllerinin plan davranışını doğrular. Testler `tests/*.tftest.hcl` içinde `command = plan` ve Docker provider mock’ları kullanır; gerçek image, container, network veya volume oluşturmaz ve mevcut `terraform.tfstate` dosyasına dokunmaz.
+
+```bash
+make terraform-test
+```
+
+`terraform validate` yapılandırmanın sözdizimi, tipleri, provider şeması ve statik referanslarını kontrol eder. `terraform test` mock provider ile tanımlı test senaryolarının planını ve assertion’larını çalıştırır. Gerçek `terraform plan` ise mevcut state’i ve gerçek provider’ı kullanarak gerçek altyapı ile beklenen değişiklikleri karşılaştırır; bu nedenle Docker daemon ve gerçek ortam girdileri gerektirebilir.
+
 ### Lokal çalıştırma
 
 Araçlar kurulu değilse Makefile hedefleri hangi aracın eksik olduğunu ve resmi kurulum bağlantısını bildirir:

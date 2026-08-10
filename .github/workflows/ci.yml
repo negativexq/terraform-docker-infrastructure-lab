@@ -27,6 +27,24 @@ jobs:
       - name: Validate Terraform
         run: terraform validate
 
+  terraform-tests:
+    name: Terraform tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Initialize Terraform without backend
+        run: terraform init -backend=false
+
+      - name: Run native Terraform tests
+        run: terraform test
+
   python:
     name: Python checks
     runs-on: ubuntu-latest

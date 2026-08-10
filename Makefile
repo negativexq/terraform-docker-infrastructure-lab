@@ -2,7 +2,7 @@ SHELL := /bin/sh
 TFVARS ?= terraform.tfvars
 PYTHON ?= python3
 
-.PHONY: init fmt validate plan apply destroy test security tflint trivy hadolint gitleaks
+.PHONY: init fmt validate plan apply destroy test terraform-test check security tflint trivy hadolint gitleaks
 
 init:
 	terraform init
@@ -26,6 +26,12 @@ test:
 	$(PYTHON) -m pip check
 	$(PYTHON) -m pytest app
 	$(PYTHON) -m ruff check app
+
+terraform-test:
+	terraform init -backend=false
+	terraform test
+
+check: validate terraform-test test
 
 security: tflint trivy hadolint gitleaks
 
