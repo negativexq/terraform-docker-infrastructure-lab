@@ -12,9 +12,11 @@ flowchart LR
     Nginx -->|özel Docker network| API[FastAPI API :8000]
     API -->|özel Docker network| DB[(PostgreSQL :5432)]
     DB --- Volume[(Docker volume)]
+    Prom[Prometheus :9090] -->|scrape /metrics| API
+    Grafana[Grafana :3000] -->|PromQL| Prom
 ```
 
-Dışarıya yalnızca Nginx portu açılır. FastAPI ve PostgreSQL host portlarına publish edilmez; servisler özel Docker network üzerinde container adıyla haberleşir. PostgreSQL verisi `${environment}` bazlı kalıcı Docker volume içinde tutulur.
+Dışarıdan uygulamaya yalnızca Nginx üzerinden erişilir; FastAPI ve PostgreSQL host portlarına publish edilmez. Prometheus ve Grafana eğitim gözlemlenebilirliği için ayrı host portlarından açılır. Servisler özel Docker network üzerinde container adıyla haberleşir. PostgreSQL verisi `${environment}` bazlı kalıcı Docker volume içinde tutulur.
 
 ## Kullanılan teknolojiler
 
@@ -22,6 +24,7 @@ Dışarıya yalnızca Nginx portu açılır. FastAPI ve PostgreSQL host portlar�
 - Docker Engine / Docker Desktop
 - Nginx 1.27 Alpine
 - Python 3.12, FastAPI, Uvicorn ve psycopg 3
+- Prometheus client, Prometheus ve Grafana
 - PostgreSQL 16 Alpine
 - GitHub Actions
 
@@ -48,9 +51,10 @@ Başarılı apply sonrasında:
 curl http://localhost:8080/
 curl http://localhost:8080/health
 curl http://localhost:8080/db-health
+curl http://localhost:8080/metrics
 ```
 
-Terraform çıktısındaki `application_url` değerini de kullanabilirsiniz.
+Terraform çıktısındaki `application_url`, `prometheus_url` ve `grafana_url` değerlerini de kullanabilirsiniz. Grafana’ya `admin` kullanıcı adı ve kendi `grafana_admin_password` değerinizle giriş yapın.
 
 ## Development ve production örnekleri
 
@@ -73,6 +77,12 @@ terraform apply -var-file=terraform-production.tfvars
 
 `*.tfvars` dosyaları `.gitignore` içindedir. Gerçek parola veya secret commit edilmemelidir. CI yalnızca format/init/validation ve Python kontrollerini çalıştırır; Docker erişimi gerektiren `terraform apply` otomatik çalıştırılmaz.
 
+### FastAPI image rebuild davranışı
+
+`docker_image.app` kaynağı, `app/` build context’indeki dosya yollarını sıralayıp her dosyanın içeriğiyle birlikte SHA-256 hash’ler. Bu birleşik değer Terraform Docker provider’ın `triggers.source_hash` alanına verilir. `main.py`, `Dockerfile`, `requirements.txt` veya `app/` altındaki başka bir kaynak değiştiğinde sonraki `terraform plan` image’ın yeniden oluşturulmasını gösterir.
+
+Python cache ve test/lint cache dosyaları (`__pycache__`, `.pytest_cache`, `.ruff_cache`, `.pyc`) hash’e dahil edilmez; bunlar Docker build context’inden de `.dockerignore` ile çıkarılır. Böylece yalnızca gerçek uygulama girdilerindeki değişiklikler rebuild tetikler.
+
 ## Make komutları
 
 | Komut | Açıklama |
@@ -94,6 +104,23 @@ Başka bir değişken dosyası için: `make plan TFVARS=environments/development
 | `GET /` | Uygulama adı, ortam ve çalışma bilgisini döndürür. |
 | `GET /health` | FastAPI prosesinin hazır olduğunu gösterir. |
 | `GET /db-health` | PostgreSQL’e gerçek bir `SELECT 1` bağlantı kontrolü yapar. |
+| `GET /metrics` | Prometheus’un scrape ettiği istek sayısı ve gecikme metriklerini döndürür. |
+
+## Prometheus ve Grafana
+
+FastAPI, her isteği aşağıdaki iki metrikle ölçer:
+
+- `fastapi_http_requests_total`: method, path ve HTTP status etiketleriyle toplam istek sayısı
+- `fastapi_http_request_duration_seconds`: method ve path etiketleriyle istek süresi histogramı
+
+Prometheus bu endpoint’i 15 saniyede bir scrape eder. Grafana datasource’u ve `FastAPI Overview` dashboard’u Terraform apply sırasında dosya provisioning ile otomatik yüklenir.
+
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+- Grafana kullanıcı adı: `admin`
+- Grafana parolası: lokal `terraform.tfvars` içindeki `grafana_admin_password`
+
+Dashboard’da istek hızı, P95 gecikme ve HTTP status dağılımı panelleri bulunur. Prometheus ve Grafana container’ları API ile aynı özel network üzerindedir; Grafana datasource URL’si `http://prometheus:9090` olarak tanımlıdır.
 
 ## Proje dizin yapısı
 
@@ -110,6 +137,12 @@ Başka bir değişken dosyası için: `make plan TFVARS=environments/development
 │   ├── development.tfvars.example
 │   └── production.tfvars.example
 ├── nginx/nginx.conf
+├── prometheus/prometheus.yml
+├── grafana/
+│   ├── dashboards/fastapi-overview.json
+│   └── provisioning/
+│       ├── dashboards/dashboard.yml
+│       └── datasources/prometheus.yml
 ├── main.tf
 ├── providers.tf
 ├── variables.tf
@@ -127,7 +160,7 @@ Local backend varsayılan olarak kullanılır ve state dosyası çalışma dizin
 ## Güvenlik notları
 
 - PostgreSQL host portuna publish edilmez.
-- Secret değişkeni `sensitive = true` olarak tanımlıdır.
+- PostgreSQL ve Grafana parola değişkenleri `sensitive = true` olarak tanımlıdır.
 - Gerçek secret’lar `.tfvars` veya state içine yazılmamalı; eğitimde bile lokal, geçici değerler kullanılmalıdır.
 - Nginx burada HTTP ile çalışır. Gerçek kullanımda TLS ve secret manager eklenmelidir.
 - Container image tag’leri örnek olarak sabitlenmiştir; güncelleme yapılırken güvenlik taraması ve kontrollü yükseltme uygulanmalıdır.
@@ -141,6 +174,10 @@ Local backend varsayılan olarak kullanılır ve state dosyası çalışma dizin
 **`db-health` başarısız**: `docker ps` ve `docker logs terraform-docker-lab-development-postgres` ile PostgreSQL’in health durumunu ve loglarını kontrol edin. İlk başlatmada veritabanının hazır olması birkaç saniye sürebilir.
 
 **Nginx 502 döndürüyor**: API container loglarını (`docker logs terraform-docker-lab-development-api`) ve `docker network inspect` çıktısını kontrol edin; gerekirse `terraform apply` sonrasında birkaç saniye bekleyin.
+
+**Prometheus target’ı DOWN**: `curl http://localhost:9090/targets` ile target durumunu kontrol edin. API container’ının `api` network alias’ına sahip olduğundan ve `curl http://localhost:8080/metrics` çıktısının döndüğünden emin olun.
+
+**Grafana dashboard’u görünmüyor**: Grafana loglarında provisioning hatası arayın. `grafana/provisioning` ve `grafana/dashboards` klasörlerinin container’a doğru mount edildiğini kontrol etmek için `docker inspect terraform-docker-lab-development-grafana` kullanın.
 
 **Provider veya Terraform sürüm hatası**: Terraform sürümünün `>= 1.5.0, < 2.0.0` aralığında olduğundan emin olun ve `make init` komutunu yeniden çalıştırın.
 
@@ -159,6 +196,8 @@ Bu komut Terraform’un yönettiği container, network ve PostgreSQL volume’un
 - Resource dependency graph ve servis başlatma sırası
 - Container healthcheck ile proses ve veritabanı hazır olma kontrolü
 - Docker network üzerinden servis keşfi ve reverse proxy
+- Prometheus exposition formatı, scrape config ve Grafana file provisioning
+- Request counter/histogram metrikleri ve PromQL dashboard sorguları
 - Local Terraform state, plan/apply/destroy döngüsü ve outputs
 - Sabitlenmiş Python bağımlılıkları, Dockerfile ve temel API testleri
 - Docker gerektirmeyen Terraform CI doğrulaması ve güvenli GitHub Actions tasarımı

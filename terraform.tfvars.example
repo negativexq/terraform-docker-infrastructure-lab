@@ -1,6 +1,9 @@
 environment          = "development"
 nginx_port           = 8080
+prometheus_port      = 9090
+grafana_port         = 3000
 container_name_prefix = "terraform-docker-lab"
 postgres_db          = "appdb"
 postgres_user        = "appuser"
 postgres_password    = "local-only-change-me"
+grafana_admin_password = "grafana-local-change-me"

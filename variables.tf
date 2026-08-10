@@ -53,6 +53,50 @@ variable "app_image" {
   }
 }
 
+variable "prometheus_image" {
+  description = "Pinned Prometheus image tag."
+  type        = string
+  default     = "prom/prometheus:v3.2.1"
+
+  validation {
+    condition     = can(regex("^prom/prometheus:[^:]+$", var.prometheus_image))
+    error_message = "prometheus_image must be a Prometheus image with a pinned tag."
+  }
+}
+
+variable "grafana_image" {
+  description = "Pinned Grafana image tag."
+  type        = string
+  default     = "grafana/grafana:11.5.2"
+
+  validation {
+    condition     = can(regex("^grafana/grafana:[^:]+$", var.grafana_image))
+    error_message = "grafana_image must be a Grafana image with a pinned tag."
+  }
+}
+
+variable "prometheus_port" {
+  description = "Host port exposed by Prometheus."
+  type        = number
+  default     = 9090
+
+  validation {
+    condition     = var.prometheus_port >= 1024 && var.prometheus_port <= 65535
+    error_message = "prometheus_port must be between 1024 and 65535."
+  }
+}
+
+variable "grafana_port" {
+  description = "Host port exposed by Grafana."
+  type        = number
+  default     = 3000
+
+  validation {
+    condition     = var.grafana_port >= 1024 && var.grafana_port <= 65535
+    error_message = "grafana_port must be between 1024 and 65535."
+  }
+}
+
 variable "container_name_prefix" {
   description = "Prefix applied to Docker container names."
   type        = string
@@ -94,5 +138,16 @@ variable "postgres_password" {
   validation {
     condition     = length(var.postgres_password) >= 8
     error_message = "postgres_password must contain at least 8 characters."
+  }
+}
+
+variable "grafana_admin_password" {
+  description = "Grafana admin password for the local lab."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(var.grafana_admin_password) >= 8
+    error_message = "grafana_admin_password must contain at least 8 characters."
   }
 }
