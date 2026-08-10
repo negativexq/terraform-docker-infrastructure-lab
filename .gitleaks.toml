@@ -1,0 +1,14 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Only the committed, non-secret example placeholders are allowlisted by exact value."
+regexTarget = "match"
+regexes = [
+  '''^local-only-change-me$''',
+  '''^grafana-local-change-me$''',
+  '''^local-dev-change-me$''',
+  '''^grafana-dev-change-me$''',
+  '''^local-production-change-me$''',
+  '''^grafana-production-change-me$''',
+]

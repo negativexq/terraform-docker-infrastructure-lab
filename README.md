@@ -171,6 +171,9 @@ Production’da Mailpit yerine erişim kontrollü gerçek bir SMTP relay veya e-
 ```text
 .
 ├── .github/workflows/ci.yml
+├── .github/dependabot.yml
+├── .gitleaks.toml
+├── .tflint.hcl
 ├── app/
 │   ├── Dockerfile
 │   ├── main.py
@@ -249,6 +252,49 @@ Local backend varsayılan olarak kullanılır ve state dosyası çalışma dizin
 - Gerçek secret’lar `.tfvars` veya state içine yazılmamalı; eğitimde bile lokal, geçici değerler kullanılmalıdır.
 - Nginx burada HTTP ile çalışır. Gerçek kullanımda TLS ve secret manager eklenmelidir.
 - Container image tag’leri örnek olarak sabitlenmiştir; güncelleme yapılırken güvenlik taraması ve kontrollü yükseltme uygulanmalıdır.
+
+## Security checks
+
+Bu repository’deki DevSecOps kontrolleri uygulama kodu, Terraform, Dockerfile, dependency’ler, container image ve Git geçmişi için farklı sinyaller üretir. Hiçbir kontrol gerçek bir penetration testinin veya production güvenlik incelemesinin yerine geçmez.
+
+| Araç | Kontrol |
+|---|---|
+| TFLint | Root module ve `modules/**` altında Terraform naming, unused declaration, required version/provider ve genel Terraform kalite kuralları |
+| Trivy config | Terraform ve Dockerfile IaC yanlış yapılandırmaları |
+| Trivy fs | Repository dependency ve secret taraması; vulnerability sonuçlarında `ignore-unfixed` |
+| Trivy image | CI içinde yalnızca lokal oluşturulan FastAPI image’ındaki HIGH/CRITICAL vulnerability’ler |
+| Gitleaks | Git geçmişi ve mevcut çalışma ağacında secret sızıntısı |
+| Hadolint | `app/Dockerfile` best-practice ve güvenlik lint’i |
+| Dependabot | GitHub Actions, Terraform provider, Python/pip ve Docker base image güncellemeleri |
+
+### Lokal çalıştırma
+
+Araçlar kurulu değilse Makefile hedefleri hangi aracın eksik olduğunu ve resmi kurulum bağlantısını bildirir:
+
+```bash
+make tflint
+make hadolint
+make gitleaks
+make trivy
+make security
+```
+
+`make trivy`, Terraform/Dockerfile config taraması, repository vulnerability/secret taraması ve Docker daemon varsa lokal `terraform-docker-lab-api:security` image build + vulnerability taraması yapar. Image build her zaman `--pull --no-cache` ile çalışır. Image enforcement taraması `--ignore-unfixed --severity HIGH,CRITICAL` kullanır: upstream fix’i yayınlanmış HIGH/CRITICAL bulgular CI’ı başarısız yapar; henüz fix’i olmayan bulgular geçici kabul edilmiş risk olarak raporda tutulur ve base image/Dependabot güncellemeleriyle takip edilir. Tarama geçirmek için CVE allowlist veya geniş suppression eklenmez. Image taraması Terraform state’i veya çalışan Docker container’larını kullanmaz.
+
+### CI davranışı ve bulgu inceleme
+
+GitHub Actions’ta güvenlik kontrolleri Terraform apply çalıştırmaz. TFLint, Hadolint ve Gitleaks `contents: read` ile ayrı job’larda çalışır. Trivy config, filesystem ve CI image taramalarını tek job’da çalıştırır; IaC ve image sonuçlarını SARIF olarak GitHub code scanning’e yükler. SARIF yükleyen job dışında `security-events: write` verilmez. Fork pull request’lerinde token/izin kısıtları nedeniyle SARIF upload adımı atlanır, fakat tarama ve HIGH/CRITICAL threshold enforcement devam eder.
+
+Bir job başarısız olduğunda ilgili logdaki dosya, rule ID/CVE ve severity bilgisini inceleyin. Önce kodu veya dependency’yi düzeltin; taramayı geçirmek için genel `ignore`, geniş path exclusion veya severity düşürme eklemeyin. Gerçekten doğrulanmış ve dar kapsamlı bir false positive varsa gerekçeyi kod review’da belgeleyin.
+
+Example `.tfvars` dosyalarındaki `local-only-change-me` gibi değerler credential değildir. Gitleaks default kuralları açık kalır; yalnızca açıkça example olan `.tfvars.example` path’leri allowlist’e alınmıştır. Gerçek `terraform.tfvars`, state ve secret dosyaları taramadan çıkarılmaz.
+
+### Kabul edilmiş lokal riskler
+
+- Bu eğitim projesi sabit public image tag’leri kullanır; Dependabot güncelleme PR’ları ve Trivy bulguları düzenli incelenmelidir.
+- Mailpit ve monitoring UI’ları lokal HTTP servisleridir; production’da TLS, erişim kontrolü ve secret manager gerekir.
+- CI image taraması Docker daemon gerektirir ve yalnızca ephemeral FastAPI image’ını tarar; registry veya production image taraması değildir.
+- Trivy vulnerability database veya misconfiguration bundle indirilemezse bu bir güvenlik sonucu değil, araç/veri kaynağı erişim problemidir; CI job’ı başarısız kabul edilmelidir.
 
 ## Sorun giderme
 
