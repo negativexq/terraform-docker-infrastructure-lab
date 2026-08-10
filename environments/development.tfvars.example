@@ -1,0 +1,4 @@
+environment           = "development"
+nginx_port            = 8080
+container_name_prefix = "terraform-docker-lab"
+postgres_password     = "local-dev-change-me"

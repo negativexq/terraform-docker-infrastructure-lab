@@ -1,0 +1,4 @@
+environment           = "production"
+nginx_port            = 8081
+container_name_prefix = "terraform-docker-lab"
+postgres_password     = "local-production-change-me"
