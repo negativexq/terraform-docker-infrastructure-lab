@@ -9,3 +9,4 @@ postgres_db          = "appdb"
 postgres_user        = "appuser"
 postgres_password    = "local-only-change-me"
 grafana_admin_password = "grafana-local-change-me"
+enable_test_endpoints  = false

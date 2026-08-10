@@ -53,6 +53,12 @@ variable "app_image" {
   }
 }
 
+variable "enable_test_endpoints" {
+  description = "Enable opt-in endpoints used only by local load and alert tests."
+  type        = bool
+  default     = false
+}
+
 variable "prometheus_image" {
   description = "Pinned Prometheus image tag."
   type        = string

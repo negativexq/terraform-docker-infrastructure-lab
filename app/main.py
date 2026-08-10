@@ -1,8 +1,9 @@
+import asyncio
 import os
 import time
 
 import psycopg
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.requests import Request
 from starlette.responses import Response
@@ -73,3 +74,22 @@ def db_health():
             status_code=503,
             detail={"status": "error", "database": "unreachable", "detail": str(error)},
         ) from error
+
+
+def test_endpoints_enabled():
+    return os.getenv("ENABLE_TEST_ENDPOINTS", "false").lower() in {"1", "true", "yes"}
+
+
+@app.get("/_test/error", include_in_schema=False)
+def test_error():
+    if not test_endpoints_enabled():
+        raise HTTPException(status_code=404, detail="Not found")
+    raise HTTPException(status_code=500, detail="Controlled test error")
+
+
+@app.get("/_test/latency", include_in_schema=False)
+async def test_latency(delay_ms: int = Query(default=750, ge=50, le=2000)):
+    if not test_endpoints_enabled():
+        raise HTTPException(status_code=404, detail="Not found")
+    await asyncio.sleep(delay_ms / 1000)
+    return {"status": "ok", "delay_ms": delay_ms}

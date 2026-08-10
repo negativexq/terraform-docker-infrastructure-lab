@@ -18,15 +18,16 @@ module "application" {
   container_name_prefix = var.container_name_prefix
   network_name          = module.network.network_name
 
-  app_context       = "./app"
-  nginx_config_path = abspath("${path.root}/nginx/nginx.conf")
-  app_image         = var.app_image
-  nginx_image       = var.nginx_image
-  nginx_port        = var.nginx_port
-  postgres_db       = var.postgres_db
-  postgres_image    = var.postgres_image
-  postgres_password = var.postgres_password
-  postgres_user     = var.postgres_user
+  app_context           = "./app"
+  nginx_config_path     = abspath("${path.root}/nginx/nginx.conf")
+  app_image             = var.app_image
+  nginx_image           = var.nginx_image
+  nginx_port            = var.nginx_port
+  postgres_db           = var.postgres_db
+  postgres_image        = var.postgres_image
+  postgres_password     = var.postgres_password
+  postgres_user         = var.postgres_user
+  enable_test_endpoints = var.enable_test_endpoints
 }
 
 module "observability" {

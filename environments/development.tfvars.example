@@ -7,3 +7,4 @@ mailpit_web_port       = 8025
 container_name_prefix = "terraform-docker-lab"
 postgres_password     = "local-dev-change-me"
 grafana_admin_password = "grafana-dev-change-me"
+enable_test_endpoints  = false

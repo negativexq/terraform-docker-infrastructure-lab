@@ -58,3 +58,9 @@ variable "postgres_password" {
   type        = string
   sensitive   = true
 }
+
+variable "enable_test_endpoints" {
+  description = "Enable opt-in endpoints used only by local load and alert tests."
+  type        = bool
+  default     = false
+}

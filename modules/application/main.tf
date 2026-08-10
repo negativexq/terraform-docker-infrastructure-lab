@@ -77,13 +77,13 @@ resource "docker_container" "app" {
   name  = "${local.name}-api"
   image = docker_image.app.image_id
 
-  env = [
+  env = concat([
     "APP_ENV=${var.environment}",
     "POSTGRES_HOST=${docker_container.postgres.name}",
     "POSTGRES_DB=${var.postgres_db}",
     "POSTGRES_USER=${var.postgres_user}",
     "POSTGRES_PASSWORD=${var.postgres_password}",
-  ]
+  ], var.enable_test_endpoints ? ["ENABLE_TEST_ENDPOINTS=true"] : [])
 
   networks_advanced {
     name    = var.network_name

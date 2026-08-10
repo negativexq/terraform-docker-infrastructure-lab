@@ -33,7 +33,7 @@ Dışarıdan uygulamaya yalnızca Nginx üzerinden erişilir; FastAPI ve Postgre
 
 ## Ön koşullar
 
-Docker Desktop veya Docker Engine çalışıyor olmalı. Ayrıca Terraform 1.5+ ve Python 3.12+ kurulu olmalıdır. `make test` için Python sanal ortamında test bağımlılıkları bulunmalıdır.
+Docker Desktop veya Docker Engine çalışıyor olmalı. Ayrıca Terraform 1.5+ ve Python 3.12+ kurulu olmalıdır. `make test` için Python sanal ortamında test bağımlılıkları bulunmalıdır. Yük ve uçtan uca alarm testleri için `curl`, `jq` ve çalışan Terraform stack’i gerekir; k6 ayrıca kurulmaz, Docker ile sabitlenmiş resmi `grafana/k6` image’ı kullanılır.
 
 ## Hızlı başlangıç
 
@@ -97,6 +97,13 @@ Python cache ve test/lint cache dosyaları (`__pycache__`, `.pytest_cache`, `.ru
 | `make apply` | Lokal Docker altyapısını oluşturur veya günceller. |
 | `make destroy` | Container, network ve volume kaynaklarını kaldırır. |
 | `make test` | FastAPI testlerini ve Ruff lint kontrolünü çalıştırır. |
+| `make terraform-test` | Docker oluşturmadan native Terraform testlerini çalıştırır. |
+| `make load-smoke` | `/`, `/health` ve `/db-health` için kısa k6 smoke testi çalıştırır. |
+| `make load-test` | Kademeli VU artışı ve p95/hata oranı eşikleriyle kontrollü yük testi çalıştırır. |
+| `make alert-test-error` | Opt-in kontrollü 500 trafiğiyle `HighErrorRate` alarmını doğrular. |
+| `make alert-test-latency` | Opt-in kontrollü gecikmeyle `HighP95Latency` alarmını doğrular. |
+| `make alert-test-down` | API container’ını trap ile geri getirerek `FastAPIDown` alarmını doğrular. |
+| `make alert-test` | Error, latency ve down alarm testlerini sırasıyla çalıştırır. |
 
 Başka bir değişken dosyası için: `make plan TFVARS=environments/development.tfvars`.
 
@@ -108,6 +115,55 @@ Başka bir değişken dosyası için: `make plan TFVARS=environments/development
 | `GET /health` | FastAPI prosesinin hazır olduğunu gösterir. |
 | `GET /db-health` | PostgreSQL’e gerçek bir `SELECT 1` bağlantı kontrolü yapar. |
 | `GET /metrics` | Prometheus’un scrape ettiği istek sayısı ve gecikme metriklerini döndürür. |
+
+`GET /_test/error` ve `GET /_test/latency?delay_ms=750` yalnızca `enable_test_endpoints = true` ile açılan, k6 alarm testlerine özel endpoint’lerdir. Gecikme değeri 50–2000 ms arasında doğrulanır; endpoint’ler varsayılan ve production örneklerinde kapalıdır. Secret, debug bilgisi veya stack trace döndürmezler.
+
+### k6 yük ve uçtan uca alarm testleri
+
+Smoke ve normal yük testleri uygulamanın başarı oranını ve p95 gecikmesini ölçer. Alarm testleri ise bilerek kontrollü 500, gecikme veya API durması üretir; bu nedenle varsayılan `make check` içine eklenmez.
+
+Önce yalnızca lokal test ortamında endpoint’leri açıp yeniden apply edin:
+
+```hcl
+enable_test_endpoints = true
+```
+
+Ardından örnek komutlar:
+
+```bash
+make load-smoke
+K6_LOAD_PEAK_VUS=20 K6_LOAD_STEADY_SECONDS=60 make load-test
+make alert-test-error
+K6_DELAY_MS=900 make alert-test-latency
+make alert-test-down
+make alert-test
+```
+
+`K6_BASE_URL`, `K6_VUS`, `K6_DURATION`, `K6_P95_LIMIT_MS`, `K6_LOAD_PEAK_VUS`, `K6_LOAD_RAMP_SECONDS`, `K6_LOAD_STEADY_SECONDS`, `K6_ERROR_VUS`, `K6_LATENCY_VUS` ve `K6_DELAY_MS` ile hedef, kullanıcı sayısı, süre ve eşikler değiştirilebilir. Container içi varsayılan hedef mevcut Nginx alias’ıdır; host networking varsayılmaz. `ENVIRONMENT`, `CONTAINER_NAME_PREFIX` ve `NETWORK_NAME` ile mevcut Terraform adlandırması seçilebilir.
+
+`scripts/test-alerts.sh` gerekli araçları, Docker network’ünü ve servis health durumlarını kontrol eder. Prometheus HTTP API’de alarmı **Pending → Firing**, Alertmanager API’de teslim edilmiş ve Mailpit API’de ilgili e-posta olarak doğrular. Prometheus ve Alertmanager’daki mevcut `for`/group süreleri değiştirilmez; script süre sınırı olan polling kullanır. FastAPIDown testinde API trap ile yeniden başlatılır ve test sonunda tüm servislerin health durumu yeniden kontrol edilir.
+
+Sonuçları Prometheus’un `/alerts`, Alertmanager’ın `/api/v2/alerts` ve Mailpit’in `/api/v1/messages` endpoint’lerinden veya sırasıyla 9090, 9093 ve 8025 portlarından görebilirsiniz. Alarm firing olduktan sonra trafik kesilince Prometheus resolved durumuna geçer; Alertmanager ve Mailpit `send_resolved` yapılandırmasıyla resolved bildirimi üretir.
+
+Bu uzun süreli ve gerçek Docker altyapısına dokunan alarm testleri otomatik push/PR CI kapısına eklenmemiştir. Paylaşılan state, port ve Docker daemon gerektirdiğinden güvenli bir izolasyon/ephemeral Terraform apply ortamı olmadan manuel workflow eklemek mevcut altyapıyı riske atardı; lokal komutlar kontrollü doğrulama için kullanılmalıdır.
+
+### Verified load and alert test results
+
+10 Ağustos 2026 tarihinde macOS 26.5.2, arm64 ve Docker Desktop üzerindeki Docker Engine 28.3.0 ile lokal `development` ortamında tek bir doğrulama çalışması yapıldı. Host Terraform CLI 1.15.8 bildirdi; gerçek plan/apply ve native testler mevcut CI uyumluluğu için Terraform 1.9.8 container’ında çalıştırıldı. Sonuçlar evrensel performans benchmark’ı değildir; yalnızca bu lokal geliştirme makinesindeki gözlemlerdir.
+
+| Test | Result | Requests | Error rate | p95 | Peak VU / süre | Alert lifecycle | Notification |
+|---|---|---:|---:|---:|---|---|---|
+| Smoke | Passed | 6,948 | 0.00% | 5.62 ms | 1 / 15 s | N/A | N/A |
+| Load | Passed | 107,525 | 0.00% | 6.85 ms | 10 / 60 s | N/A | N/A |
+| HighErrorRate | Passed | 135,905 | 100.00% kontrollü 500 | 3.82 ms | 5 / 75 s | Pending → Firing → Resolved | Alertmanager + Mailpit doğrulandı |
+| HighP95Latency | Passed | 495 | 0.00% | 762.71 ms | 5 / 75.1 s | Pending → Firing → Resolved | Alertmanager + Mailpit doğrulandı |
+| FastAPIDown | Passed | 353,774 | 100.00% beklenen down trafiği | 0.17 ms | 1 / 45 s | Pending → Firing → Resolved | Alertmanager + Mailpit doğrulandı |
+
+Smoke ve load testlerinde k6 threshold’ları geçti. HighErrorRate senaryosu isteklerin tamamında kontrollü HTTP 500 üretti; HighP95Latency senaryosu `delay_ms=750` ile gerçek p95’i 500 ms alarm eşiğinin üzerine çıkardı. FastAPIDown sırasında yalnızca API container’ı geçici olarak durduruldu; script’in cleanup/trap mekanizması API’yi yeniden başlattı ve `/health` tekrar HTTP 200 döndü.
+
+Bu çalışmada `enable_test_endpoints=true` yalnızca açma planı ve alarm testleri süresince kullanıldı. Kapanış planı uygulanınca `/_test/error` ve `/_test/latency` tekrar HTTP 404 döndürdü. PostgreSQL container’ı ve `terraform-docker-lab-development-postgres-data` volume’u korunarak aynı isim ve mount noktasıyla kaldı; network, Prometheus, Grafana, Alertmanager ve Mailpit kaynakları değiştirilmedi.
+
+Test sonrasında değişkensiz gerçek Terraform planı `No changes` verdi ve tüm container’lar healthy kaldı. Aynı doğrulamayı yeniden çalıştırmak için `make load-smoke`, `make load-test`, `make alert-test-error`, `make alert-test-latency` ve `make alert-test-down` komutlarını kullanın. Alarm testleri mevcut Prometheus `for` sürelerini beklediği için birkaç dakika sürebilir.
 
 ## Prometheus ve Grafana
 

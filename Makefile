@@ -1,8 +1,14 @@
 SHELL := /bin/sh
 TFVARS ?= terraform.tfvars
 PYTHON ?= python3
+ENVIRONMENT ?= development
+CONTAINER_NAME_PREFIX ?= terraform-docker-lab
+NETWORK_NAME ?= $(CONTAINER_NAME_PREFIX)-$(ENVIRONMENT)-network
+K6_IMAGE ?= grafana/k6:2.1.0@sha256:65c920dc067d5e2e00befbf982af6ad6ad0117034e8b1c65817c7975c52d4669
+K6_BASE_URL ?= http://$(CONTAINER_NAME_PREFIX)-$(ENVIRONMENT)-nginx:80
+K6_RUN = docker run --rm --network $(NETWORK_NAME) -v "$(CURDIR)/k6:/scripts:ro" -e K6_BASE_URL="$(K6_BASE_URL)" $(K6_IMAGE) run
 
-.PHONY: init fmt validate plan apply destroy test terraform-test check security tflint trivy hadolint gitleaks
+.PHONY: init fmt validate plan apply destroy test terraform-test check security tflint trivy hadolint gitleaks load-smoke load-test alert-test-error alert-test-latency alert-test-down alert-test
 
 init:
 	terraform init
@@ -26,6 +32,24 @@ test:
 	$(PYTHON) -m pip check
 	$(PYTHON) -m pytest app
 	$(PYTHON) -m ruff check app
+
+load-smoke:
+	$(K6_RUN) /scripts/smoke.js
+
+load-test:
+	$(K6_RUN) /scripts/load.js
+
+alert-test-error:
+	ENVIRONMENT=$(ENVIRONMENT) CONTAINER_NAME_PREFIX=$(CONTAINER_NAME_PREFIX) NETWORK_NAME=$(NETWORK_NAME) K6_IMAGE="$(K6_IMAGE)" scripts/test-alerts.sh error
+
+alert-test-latency:
+	ENVIRONMENT=$(ENVIRONMENT) CONTAINER_NAME_PREFIX=$(CONTAINER_NAME_PREFIX) NETWORK_NAME=$(NETWORK_NAME) K6_IMAGE="$(K6_IMAGE)" scripts/test-alerts.sh latency
+
+alert-test-down:
+	ENVIRONMENT=$(ENVIRONMENT) CONTAINER_NAME_PREFIX=$(CONTAINER_NAME_PREFIX) NETWORK_NAME=$(NETWORK_NAME) K6_IMAGE="$(K6_IMAGE)" scripts/test-alerts.sh down
+
+alert-test:
+	ENVIRONMENT=$(ENVIRONMENT) CONTAINER_NAME_PREFIX=$(CONTAINER_NAME_PREFIX) NETWORK_NAME=$(NETWORK_NAME) K6_IMAGE="$(K6_IMAGE)" scripts/test-alerts.sh all
 
 terraform-test:
 	terraform init -backend=false
